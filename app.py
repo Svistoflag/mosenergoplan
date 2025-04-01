@@ -1,10 +1,12 @@
-
 import streamlit as st
 import pandas as pd
 import re
+import requests
+import json
+import folium
 from modules.geocode import geocode_address
 from modules.dadata_api import CadastralProcessor
-import requests
+from streamlit_folium import st_folium
 
 st.set_page_config(layout="wide")
 st.title("МОСЭНЕРГОСБЫТ: Построение маршрута по адресам")
@@ -59,7 +61,6 @@ if uploaded_file:
         st.subheader("🟢 Все строки с валидными адресами")
         st.dataframe(valid_df[[address_column]])
 
-        # Ввод начальной точки
         st.subheader("📍 Укажите стартовую точку маршрута")
         start_address = st.text_input("Введите адрес старта маршрута (например: Москва, Тверская 1)")
         build_route = st.button("🚗 Построить маршрут")
@@ -82,44 +83,33 @@ if uploaded_file:
 
                 if route_data:
                     st.success("✅ Маршрут построен!")
-                    st.json(route_data)
-import folium
-                from streamlit_folium import st_folium
-                from shapely.geometry import LineString
+                    route_coords = route_data["routes"][0]["geometry"]["coordinates"]
+                    reversed_coords = [(lat, lon) for lon, lat in route_coords]
 
-                # Отображение маршрута на карте
-                st.subheader("🗺️ Визуализация маршрута")
-                route_coords = route_data["routes"][0]["geometry"]["coordinates"]
-                reversed_coords = [(lat, lon) for lon, lat in route_coords]
+                    st.subheader("🗺️ Визуализация маршрута")
+                    fmap = folium.Map(location=reversed_coords[0], zoom_start=12)
+                    folium.Marker(reversed_coords[0], tooltip="Старт", icon=folium.Icon(color='green')).add_to(fmap)
+                    for i, coord in enumerate(reversed_coords[1:], start=1):
+                        folium.Marker(coord, tooltip=f"Точка {i}").add_to(fmap)
+                    folium.PolyLine(reversed_coords, color="blue", weight=4.5, opacity=0.8).add_to(fmap)
+                    st_folium(fmap, width=900, height=500)
 
-                fmap = folium.Map(location=reversed_coords[0], zoom_start=12)
-                folium.Marker(reversed_coords[0], tooltip="Старт", icon=folium.Icon(color='green')).add_to(fmap)
-                for i, coord in enumerate(reversed_coords[1:], start=1):
-                    folium.Marker(coord, tooltip=f"Точка {i}").add_to(fmap)
-                folium.PolyLine(reversed_coords, color="blue", weight=4.5, opacity=0.8).add_to(fmap)
-                st_folium(fmap, width=900, height=500)
-
-                # Экспорт маршрута в GeoJSON
-                st.subheader("📤 Экспорт маршрута")
-                geojson_route = {
-                    "type": "FeatureCollection",
-                    "features": [
-                        {
-                            "type": "Feature",
-                            "geometry": {
-                                "type": "LineString",
-                                "coordinates": route_data["routes"][0]["geometry"]["coordinates"]
-                            },
-                            "properties": {
-                                "name": "Маршрут МОСЭНЕРГОСБЫТ"
+                    st.subheader("📤 Экспорт маршрута")
+                    geojson_route = {
+                        "type": "FeatureCollection",
+                        "features": [
+                            {
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "LineString",
+                                    "coordinates": route_data["routes"][0]["geometry"]["coordinates"]
+                                },
+                                "properties": {
+                                    "name": "Маршрут МОСЭНЕРГОСБЫТ"
+                                }
                             }
-                        }
-                    ]
-                }
-                geojson_file = "/mnt/data/route_export.geojson"
-                with open(geojson_file, "w", encoding="utf-8") as f:
-                    json.dump(geojson_route, f)
-
-                st.download_button("⬇️ Скачать маршрут (GeoJSON)", data=json.dumps(geojson_route), file_name="route.geojson", mime="application/geo+json")
+                        ]
+                    }
+                    st.download_button("⬇️ Скачать маршрут (GeoJSON)", data=json.dumps(geojson_route), file_name="route.geojson", mime="application/geo+json")
                 else:
                     st.error("⚠️ Ошибка при получении маршрута.")
