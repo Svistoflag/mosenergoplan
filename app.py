@@ -15,7 +15,7 @@ def is_probable_address(value):
     if not isinstance(value, str):
         return False
     value = value.lower()
-    return any(word in value for word in ["ул", "улица", "просп", "г.", "город", "д.", "дом", "р-н", "посёлок"])
+    return any(word in value for word in ["ул", "улица", "просп", "г.", "город", "д.", "дом", "р-н", "посёлок", "переулок"])
 
 def is_kad_number(value):
     return isinstance(value, str) and bool(re.search(r"\b\d{2,3}[:\s\-_]*\d+[:\s\-_]*\d+[:\s\-_]*\d+\b", value))
@@ -35,12 +35,22 @@ if uploaded_file:
     st.dataframe(df)
 
     address_column = None
-    for col in df.columns:
-        sample = df[col].dropna().astype(str).head(50)
-        score = sum([is_probable_address(v) or is_kad_number(v) for v in sample])
-        if score / len(sample) > 0.3:
-            address_column = col
-            break
+
+    # Приоритетно проверяем четвёртую колонку
+    if len(df.columns) >= 4:
+        fourth_col = df.columns[3]
+        sample = df[fourth_col].dropna().astype(str).head(50)
+        if sum([is_probable_address(v) for v in sample]) / len(sample) > 0.3:
+            address_column = fourth_col
+
+    # Если не определена — используем автоанализ
+    if not address_column:
+        for col in df.columns:
+            sample = df[col].dropna().astype(str).head(50)
+            score = sum([is_probable_address(v) or is_kad_number(v) for v in sample])
+            if score / len(sample) > 0.3:
+                address_column = col
+                break
 
     if not address_column:
         st.error("❌ Не удалось определить колонку с адресами.")
