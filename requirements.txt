@@ -4,4 +4,3 @@ requests
 folium
 openpyxl
 streamlit-folium
-tqdm
