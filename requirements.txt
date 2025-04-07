@@ -2,7 +2,6 @@ streamlit
 pandas
 requests
 folium
-streamlit-folium
 openpyxl
-geopy
-reportlab
+streamlit-folium
+tqdm
